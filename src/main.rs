@@ -60,10 +60,11 @@ fn main() {
     let mut step = 0.1f32;
     let mut threshold = 0.4;
     let (mut startx, mut starty) = (0.0f32, 0.0f32);
-    
+
     while running {
         let (rows, cols) = (rb.height(), rb.width() / 3);
-        let (mut x, mut y) = (startx, starty);
+        let (mut x, mut y) = (startx - cols as f32 * step / 2.0,
+                              starty - rows as f32 * step / 2.0);
 
         for oy in 0..rows {
             for ox in 0..cols {
@@ -77,7 +78,7 @@ fn main() {
                 x += step;
             }
             y += step;
-            x = startx;
+            x = startx - cols as f32 * step / 2.0;
         }
 
         rb.present();
@@ -89,8 +90,8 @@ fn main() {
                 Key::Left  => startx -= step,
                 Key::Right => startx += step,
 
-                Key::Char('+') => step -= 0.01,
-                Key::Char('-') => step += 0.01,
+                Key::Char('+') if step > 0.01 => step -= 0.001,
+                Key::Char('-') => step += 0.001,
                 Key::Char('[') => threshold -= 0.01,
                 Key::Char(']') => threshold += 0.01,
 
