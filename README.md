@@ -6,6 +6,7 @@ A simple interactive demonstration of three wonderful things:
 * [Marching Squares](http://en.wikipedia.org/wiki/Marching_squares)
 
 Keys: press `ESC` or `q` to quit, arrow keys to move around, `+` or `-` to increase/decrease zoom, and `[` or `]` to adjust boundary threshold.
+If your terminal supports unicode line/block drawing characters, you can press `u` for fancier rendering.
 
 Stand-in "screenshot" until I get a chance to make a real one:
 ```
