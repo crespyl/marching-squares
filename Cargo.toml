@@ -1,0 +1,14 @@
+[package]
+
+name = "rust-ascii-march"
+version = "0.0.1"
+authors = ["Peter Jacobs <peter@crespyl.net>"]
+
+[dependencies]
+rand = "0.2.*"
+noise = "0.1.*"
+rustbox = "*"
+
+[[bin]]
+name = "ascii-march"
+path = "src/main.rs"
