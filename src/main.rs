@@ -39,8 +39,8 @@ fn corners(x: f32, y: f32, width: f32) -> [[f32; 2]; 4] {
      [x - w, y + w], [x + w, y + w]]
 }
 
-fn march(samples: &[f32; 4]) -> Cell {
-    let bits: Vec<usize> = samples.iter().map(|&s| if s > 0.2 { 1 } else { 0 }).collect();
+fn march(samples: &[f32; 4], threshold: f32) -> Cell {
+    let bits: Vec<usize> = samples.iter().map(|&s| if s > threshold { 1 } else { 0 }).collect();
     let case = bits[0] << 3 | bits[1] << 2 | bits[2] << 1 | bits[3];
     CASES[case]
 }
@@ -51,17 +51,22 @@ fn main() {
         Result::Err(e) => panic!("{}", e),
     };
 
+    // sample grid
     const ROWS: usize = 25;
     const COLS: usize = 25;
-    let field: NoiseField<f32> = NoiseField::new(Seed::new(0), Box::new(perlin2));
+
+    // set up noisefield
+    let mut field: NoiseField<f32> = NoiseField::new(Seed::new(0));
+    //  basic 2d perlin noise
+    field.add_noise(Box::new(perlin2));
+    //  perlin noise offset and scaled to give horizontal streaks
+    field.add_noise(Box::new(|seed, &[x, y]| perlin2(seed, &[x / 500.0, y + 100.0])));
 
     let mut running = true;
-    let mut startx = 0.0f32;
-    let mut starty = 0.0f32;
     let mut step = 0.1f32;
-
-    let mut x = startx;
-    let mut y = starty;
+    let mut threshold = 0.2;
+    let (mut startx, mut starty) = (0.0f32, 0.0f32);
+    let (mut x, mut y) = (startx, starty);
     
     while running {
         let rows = rb.height();
@@ -74,7 +79,7 @@ fn main() {
                                field.sample(&points[2]),
                                field.sample(&points[3])];
 
-                rb.print(ox * 3, oy, rustbox::RB_NORMAL, Color::White, Color::Black, march(&samples));
+                rb.print(ox * 3, oy, rustbox::RB_NORMAL, Color::White, Color::Black, march(&samples, threshold));
                 x += step;
             }
             y += step;
@@ -97,6 +102,8 @@ fn main() {
                             'q' => running = false,
                             '+' => step -= 0.01,
                             '-' => step += 0.01,
+                            '[' => threshold -= 0.01,
+                            ']' => threshold += 0.01,
                             _ => {}
                         }
                     }
