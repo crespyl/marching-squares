@@ -6,8 +6,7 @@ extern crate rustbox;
 use std::default::Default;
 
 use noise::{perlin2, cell2_value, Brownian2, Seed};
-use rustbox::{RustBox, Event};
-use rustbox::{Style, Color};
+use rustbox::{RustBox, Event, Key, Color};
 
 mod noisefield;
 use noisefield::NoiseField;
@@ -15,22 +14,22 @@ use noisefield::NoiseField;
 type Cell = &'static str;
 
 const CASES: [Cell; 16] = [
-    "   ",
-    "  _",
-    "_  ",
-    "___",
-    " \\_",
-    " | ",
-    "/ _",
-    "_/ ",
-    "_/ ",
-    "_ \\",
-    " | ",
-    "  \\",
-    "___",
-    "_  ",
-    "  _",
-    "###",
+    r"   ",
+    r"  _",
+    r"_  ",
+    r"___",
+    r" \_",
+    r" | ",
+    r"/ _",
+    r"_/ ",
+    r"_/ ",
+    r"_ \",
+    r" | ",
+    r"  \",
+    r"___",
+    r"_  ",
+    r"  _",
+    r"###",
 ];
 
 fn corners(x: f32, y: f32, width: f32) -> [[f32; 2]; 4] {
@@ -51,20 +50,15 @@ fn main() {
         Result::Err(e) => panic!("{}", e),
     };
 
-    // sample grid
-    const ROWS: usize = 25;
-    const COLS: usize = 25;
-
     // set up noisefield
     let mut field: NoiseField<f32> = NoiseField::new(Seed::new(0));
     field.add_noise(Box::new(perlin2));
     field.add_noise(Box::new(|seed, &[x, y]| cell2_value(seed, &[x, y]) / 2.0));
-    field.add_noise(Box::new(Brownian2::new(perlin2, 1).wavelength(2.0)));
+    field.add_noise(Box::new(Brownian2::new(perlin2, 5).wavelength(3.0)));
     
-
     let mut running = true;
     let mut step = 0.1f32;
-    let mut threshold = 0.3;
+    let mut threshold = 0.4;
     let (mut startx, mut starty) = (0.0f32, 0.0f32);
     let (mut x, mut y) = (startx, starty);
     
@@ -89,28 +83,22 @@ fn main() {
 
         rb.present();
 
-        match rb.poll_event().unwrap() {
-            Event::KeyEvent(_, key, ch) => {
-                let k = match key {
-                    27 => running = false,      // esc
-                    65514 => startx += step,    // right
-                    65515 => startx -= step,    // left
-                    65516 => starty += step,    // down
-                    65517 => starty -= step,    // up
-                    0 => {                      // other
-                        match ch as u8 as char {
-                            'q' => running = false,
-                            '+' => step -= 0.01,
-                            '-' => step += 0.01,
-                            '[' => threshold -= 0.01,
-                            ']' => threshold += 0.01,
-                            _ => {}
-                        }
-                    }
-                    _ => {}
-                };
+        if let Ok(Event::KeyEvent(Some(key))) = rb.poll_event(false) {
+            match key {
+                Key::Up    => starty -= step,
+                Key::Down  => starty += step,
+                Key::Left  => startx -= step,
+                Key::Right => startx += step,
+
+                Key::Char('+') => step -= 0.01,
+                Key::Char('-') => step += 0.01,
+                Key::Char('[') => threshold -= 0.01,
+                Key::Char(']') => threshold += 0.01,
+
+                Key::Esc | Key::Char('q') => running = false,
+
+                _ => {}
             }
-            _ => {}
         }
     }
 }
