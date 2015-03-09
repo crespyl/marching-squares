@@ -60,11 +60,11 @@ fn main() {
     let mut step = 0.1f32;
     let mut threshold = 0.4;
     let (mut startx, mut starty) = (0.0f32, 0.0f32);
-    let (mut x, mut y) = (startx, starty);
     
     while running {
-        let rows = rb.height();
-        let cols = rb.width() / 3;
+        let (rows, cols) = (rb.height(), rb.width() / 3);
+        let (mut x, mut y) = (startx, starty);
+
         for oy in 0..rows {
             for ox in 0..cols {
                 let points = corners(x, y, step);
@@ -79,7 +79,6 @@ fn main() {
             y += step;
             x = startx;
         }
-        y = starty;
 
         rb.present();
 
