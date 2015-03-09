@@ -5,7 +5,7 @@ extern crate rustbox;
 
 use std::default::Default;
 
-use noise::{perlin2, Seed};
+use noise::{perlin2, cell2_value, Brownian2, Seed};
 use rustbox::{RustBox, Event};
 use rustbox::{Style, Color};
 
@@ -57,14 +57,14 @@ fn main() {
 
     // set up noisefield
     let mut field: NoiseField<f32> = NoiseField::new(Seed::new(0));
-    //  basic 2d perlin noise
     field.add_noise(Box::new(perlin2));
-    //  perlin noise offset and scaled to give horizontal streaks
-    field.add_noise(Box::new(|seed, &[x, y]| perlin2(seed, &[x / 500.0, y + 100.0])));
+    field.add_noise(Box::new(|seed, &[x, y]| cell2_value(seed, &[x, y]) / 2.0));
+    field.add_noise(Box::new(Brownian2::new(perlin2, 1).wavelength(2.0)));
+    
 
     let mut running = true;
     let mut step = 0.1f32;
-    let mut threshold = 0.2;
+    let mut threshold = 0.3;
     let (mut startx, mut starty) = (0.0f32, 0.0f32);
     let (mut x, mut y) = (startx, starty);
     
