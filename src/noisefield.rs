@@ -1,12 +1,21 @@
 use std::default::Default;
 use std::ops::Add;
-use std::num::{Float, NumCast};
+use num::{Float, NumCast};
 use noise::{Seed, Point2};
+
+type NoiseFunc<T> = Fn(&Seed, &Point2<T>) -> T;
+
+#[derive(Copy, Clone, Debug)]
+pub enum BlendMode {
+    Add,
+    Sub,
+    Mul,
+}
 
 // 2d noise field
 pub struct NoiseField<T: Float + NumCast + Add<T> + Default> {
     pub seed: Seed,
-    noise: Vec<Box<Fn(&Seed, &Point2<T>) -> T>>
+    noise: Vec<(BlendMode, Box<NoiseFunc<T>>)>
 }
 impl<T: Float + NumCast + Add<T> + Default>  NoiseField<T> {
     pub fn new(seed: Seed) -> NoiseField<T> {
@@ -15,13 +24,21 @@ impl<T: Float + NumCast + Add<T> + Default>  NoiseField<T> {
             noise: Vec::new(),
         }
     }
-    pub fn add_noise(&mut self, func: Box<Fn(&Seed, &Point2<T>) -> T>) {
-        self.noise.push(func);
+    pub fn add_noise(&mut self, func: Box<NoiseFunc<T>>, mode: BlendMode) {
+        self.noise.push((mode, func));
     }
     pub fn sample(&self, pt: &[T; 2]) -> T {
         let mut res = Default::default();
-        for f in self.noise.iter() {
-            res = res + (f)(&self.seed, pt)
+        for tuple in self.noise.iter() {
+            let mode = tuple.0;
+            let f = &tuple.1;
+            let n = (f)(&self.seed, pt);
+            
+            res = match mode {
+                BlendMode::Add => res + n,
+                BlendMode::Mul => res * n,
+                BlendMode::Sub => res - n,
+            };
         }
         res
     }

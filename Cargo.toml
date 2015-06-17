@@ -5,9 +5,10 @@ version = "0.0.1"
 authors = ["Peter Jacobs <peter@crespyl.net>"]
 
 [dependencies]
-rand = "0.2.*"
-noise = "0.1.*"
+rand = "*"
+noise = "*"
 rustbox = "*"
+num = "*"
 
 [[bin]]
 name = "ascii-march"

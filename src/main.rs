@@ -1,9 +1,10 @@
-#![feature(core)]
+#![feature(core, slice_patterns)]
 extern crate rand;
 extern crate noise;
 extern crate rustbox;
+extern crate num;
 
-use std::num::Float;
+use num::Float;
 use std::f32::consts::{PI, PI_2};
 use std::default::Default;
 
@@ -11,7 +12,7 @@ use noise::{perlin2, cell2_value, Brownian2, Seed};
 use rustbox::{RustBox, Event, Key, Color};
 
 mod noisefield;
-use noisefield::NoiseField;
+use noisefield::{BlendMode, NoiseField};
 
 type Cell = &'static str;
 
@@ -78,16 +79,17 @@ fn main() {
     };
 
     // set up noisefield
-    let mut field: NoiseField<f32> = NoiseField::new(Seed::new(0));
-    field.add_noise(Box::new(perlin2));
-    field.add_noise(Box::new(|seed, &[x, y]| cell2_value(seed, &[x, y]) / 2.0));
-    field.add_noise(Box::new(Brownian2::new(perlin2, 5).wavelength(3.0)));
+    let mut field: NoiseField<f32> = NoiseField::new(Seed::new(42));
+    field.add_noise(Box::new(perlin2), BlendMode::Add);
 
-    // field.add_noise(Box::new(|seed, &[x, y]| {
-    //     let d = ((x*x) + (y*y)).sqrt();
-    //     let k = distance_kernel(d, 0.0, 1.0);
-    //     1.0 / k
-    // }));
+    field.add_noise(Box::new(|seed, &[x, y]| cell2_value(seed, &[x, y]) / 2.0), BlendMode::Add);
+    //field.add_noise(Box::new(Brownian2::new(perlin2, 5).wavelength(3.0)), BlendMode::Add);
+
+    field.add_noise(Box::new(|seed, &[x, y]| {
+        let d = ((x*x) + (y*y)).sqrt();
+        let k = distance_kernel(d, 0.0, 1.0);
+        1.0 / k
+    }), BlendMode::Mul);
     
     let mut running = true;
     let mut unicode = false;
@@ -107,13 +109,16 @@ fn main() {
                 let samples = vec![field.sample(&points[0]),
                                    field.sample(&points[1]),
                                    field.sample(&points[2]),
-                                   field.sample(&points[3])].iter().zip(
-                    points.iter().map(|&[sx, sy]| { 
-                        let (sx, sy) = (sx * 1.5, sy);
-                        let d = ((sx-cx)*(sx-cx) + (sy-cy)*(sy-cy)).sqrt();
-                        let k = 1.0 / distance_kernel(d, 0.0, 1.0);
-                        if k > 0.3 { k*-2.0 } else { 0.0 }
-                    })).map(|(&s, d)| s + d).collect();
+                                   field.sample(&points[3])]
+                    .iter()
+                    .zip(
+                        points.iter().map(|&[sx, sy]| { 
+                            let (sx, sy) = (sx * 1.5, sy);
+                            let d = ((sx-cx)*(sx-cx) + (sy-cy)*(sy-cy)).sqrt();
+                            let k = 1.0 / distance_kernel(d, 0.0, 1.0);
+                            if k > 0.3 { k*-2.0 } else { 0.0 }
+                    }))
+                    .map(|(&s, d)| s + d).collect();
 
                 rb.print(ox * 3, oy,
                          rustbox::RB_NORMAL, Color::White, Color::Black, 
