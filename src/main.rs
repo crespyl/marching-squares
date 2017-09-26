@@ -5,10 +5,10 @@ extern crate rustbox;
 extern crate num;
 
 use num::Float;
-use std::f32::consts::{PI, PI_2};
+use std::f32::consts::PI;
 use std::default::Default;
 
-use noise::{perlin2, cell2_value, Brownian2, Seed};
+use noise::{NoiseModule, perlin2, cell2_value, Brownian2};
 use rustbox::{RustBox, Event, Key, Color};
 
 mod noisefield;
@@ -55,15 +55,14 @@ const UNICODE_CASES: [Cell; 16] = [
 ];
 
 fn distance_kernel(d: f32, mean: f32, sigma: f32) -> f32 {
-    let g = 1.0 / PI_2.sqrt();
+    let g = 1.0 / (PI/2.0).sqrt();
     let d = (d - mean) / sigma;
     (g * (-0.5 * d * d) / sigma) + 1.0
-        
 }
 
-fn corners(x: f32, y: f32, width: f32) -> Vec<[f32; 2]> {
+fn corners(x: f32, y: f32, width: f32) -> [[f32; 2]; 4] {
     let w = width / 2.0;
-    vec![[x - w, y - w], [x + w, y - w], [x + w, y + w], [x - w, y + w]]
+    [[x - w, y - w], [x + w, y - w], [x + w, y + w], [x - w, y + w]]
 }
 
 fn march(samples: Vec<f32>, threshold: f32, unicode: bool) -> Cell {
@@ -79,18 +78,20 @@ fn main() {
     };
 
     // set up noisefield
-    let mut field: NoiseField<f32> = NoiseField::new(Seed::new(42));
-    field.add_noise(Box::new(perlin2), BlendMode::Add);
+    let mut field: NoiseField<f32> = NoiseField::new(42);
 
-    field.add_noise(Box::new(|seed, &[x, y]| cell2_value(seed, &[x, y]) / 2.0), BlendMode::Add);
+    let added = noise::Add::new(noise::Perlin::new(), noise::Worley::new());
+    field.add_noise(Box::new(move |_, &[x,y]| added.get([x,y])), BlendMode::Add);
+
+    //field.add_noise(Box::new(|seed, &[x, y]| cell2_value(&seed, &[x, y]) / 2.0), BlendMode::Add);
     //field.add_noise(Box::new(Brownian2::new(perlin2, 5).wavelength(3.0)), BlendMode::Add);
 
     field.add_noise(Box::new(|seed, &[x, y]| {
         let d = ((x*x) + (y*y)).sqrt();
         let k = distance_kernel(d, 0.0, 1.0);
-        1.0 / k
+        2.0 / k
     }), BlendMode::Mul);
-    
+
     let mut running = true;
     let mut unicode = false;
     let mut step = 0.1f32;
@@ -106,13 +107,13 @@ fn main() {
         for oy in 0..rows {
             for ox in 0..cols {
                 let points = corners(x, y, step);
-                let samples = vec![field.sample(&points[0]),
-                                   field.sample(&points[1]),
-                                   field.sample(&points[2]),
-                                   field.sample(&points[3])]
+                let samples = [field.sample(&points[0]),
+                               field.sample(&points[1]),
+                               field.sample(&points[2]),
+                               field.sample(&points[3])]
                     .iter()
                     .zip(
-                        points.iter().map(|&[sx, sy]| { 
+                        points.iter().map(|&[sx, sy]| {
                             let (sx, sy) = (sx * 1.5, sy);
                             let d = ((sx-cx)*(sx-cx) + (sy-cy)*(sy-cy)).sqrt();
                             let k = 1.0 / distance_kernel(d, 0.0, 1.0);
@@ -121,7 +122,7 @@ fn main() {
                     .map(|(&s, d)| s + d).collect();
 
                 rb.print(ox * 3, oy,
-                         rustbox::RB_NORMAL, Color::White, Color::Black, 
+                         rustbox::RB_NORMAL, Color::White, Color::Black,
                          march(samples, threshold, unicode));
                 x += step;
             }
@@ -131,7 +132,7 @@ fn main() {
 
         rb.present();
 
-        if let Ok(Event::KeyEvent(Some(key))) = rb.poll_event(false) {
+        if let Ok(Event::KeyEvent(key)) = rb.poll_event(false) {
             match key {
                 Key::Char('w') | Key::Up    => starty -= step,
                 Key::Char('s') | Key::Down  => starty += step,

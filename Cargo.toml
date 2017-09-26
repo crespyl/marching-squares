@@ -1,14 +1,14 @@
 [package]
 
 name = "rust-ascii-march"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["Peter Jacobs <peter@crespyl.net>"]
 
 [dependencies]
-rand = "*"
-noise = "*"
-rustbox = "*"
-num = "*"
+rand = "0.3"
+noise = "0.4"
+rustbox = "0.9"
+num = "0.1"
 
 [[bin]]
 name = "ascii-march"
