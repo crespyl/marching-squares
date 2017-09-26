@@ -1,16 +1,12 @@
 #![feature(slice_patterns)]
 extern crate noise;
 extern crate rustbox;
-extern crate num;
 
 use std::f32::consts::PI;
 use std::default::Default;
 
-use noise::NoiseModule;
+use noise::{NoiseModule, MultiFractal};
 use rustbox::{RustBox, Event, Key, Color};
-
-mod noisefield;
-use noisefield::{Mode, NoiseField};
 
 type Cell = &'static str;
 
@@ -78,25 +74,29 @@ fn main() {
         Result::Err(e) => panic!("{}", e),
     };
 
-    // set up noisefield
-    let mut field: NoiseField<f32> = NoiseField::new();
-
-    // use the noise crate to set up a perlin+worley noise generator
-    let noise_fn = noise::Add::new(noise::Perlin::new(), noise::Worley::new());
-
-    // create a boxed closure that will take ownership of the generator
-    field.add_noise(Box::new(move |&[x,y]| noise_fn.get([x,y])), Mode::Add);
+    // use the noise crate to set up a combination noise generator
+    //let noise_fn = noise::Add::new(noise::Perlin::new(), noise::Worley::new());
+    //let noise_fn = noise::Turbulence::new(noise::Checkerboard::new()).set_power(0.3);
+    let noise_fn = noise::Blend::new(
+        noise::Billow::new(),
+        noise::Turbulence::new(
+            noise::ScalePoint::new(
+                noise::Checkerboard::new()
+            ).set_x_scale(0.1).set_y_scale(0.1)
+        ).set_power(0.3),
+        noise::Worley::new()
+    );
 
     // create a second function that will effectively limit the output field to
     // a circle around the origin
-    field.add_noise(Box::new(|&[x, y]| {
-        let d = (x*x) + (y*y);
-        if d > 5.0 {
-            -1.0
-        } else {
-            1.0
-        }
-    }), Mode::Add);
+    // field.add_noise(Box::new(|&[x, y]| {
+    //     let d = (x*x) + (y*y);
+    //     if d > 5.0 {
+    //         -1.0
+    //     } else {
+    //         1.0
+    //     }
+    // }), Mode::Add);
 
     let mut running = true;
     let mut unicode = false;
@@ -113,10 +113,10 @@ fn main() {
         for oy in 0..rows {
             for ox in 0..cols {
                 let points = corners(x, y, step);
-                let mut samples: [f32; 4] = [field.sample(&points[0]),
-                                             field.sample(&points[1]),
-                                             field.sample(&points[2]),
-                                             field.sample(&points[3])];
+                let mut samples: [f32; 4] = [noise_fn.get(points[0]),
+                                             noise_fn.get(points[1]),
+                                             noise_fn.get(points[2]),
+                                             noise_fn.get(points[3])];
 
                 // todo: move interactive circle sampling out into a 'noise' function
                 for (sample, c_sample) in samples
