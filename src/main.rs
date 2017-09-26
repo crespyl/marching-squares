@@ -1,18 +1,16 @@
-#![feature(core, slice_patterns)]
-extern crate rand;
+#![feature(slice_patterns)]
 extern crate noise;
 extern crate rustbox;
 extern crate num;
 
-use num::Float;
 use std::f32::consts::PI;
 use std::default::Default;
 
-use noise::{NoiseModule, perlin2, cell2_value, Brownian2};
+use noise::NoiseModule;
 use rustbox::{RustBox, Event, Key, Color};
 
 mod noisefield;
-use noisefield::{BlendMode, NoiseField};
+use noisefield::{Mode, NoiseField};
 
 type Cell = &'static str;
 
@@ -65,8 +63,11 @@ fn corners(x: f32, y: f32, width: f32) -> [[f32; 2]; 4] {
     [[x - w, y - w], [x + w, y - w], [x + w, y + w], [x - w, y + w]]
 }
 
-fn march(samples: Vec<f32>, threshold: f32, unicode: bool) -> Cell {
-    let bits: Vec<usize> = samples.iter().map(|&s| if s > threshold { 1 } else { 0 }).collect();
+fn march(samples: &[f32; 4], threshold: f32, unicode: bool) -> Cell {
+    let bits = [if samples[0] > threshold { 1 } else { 0 },
+                if samples[1] > threshold { 1 } else { 0 },
+                if samples[2] > threshold { 1 } else { 0 },
+                if samples[3] > threshold { 1 } else { 0 }];
     let case = bits[0] << 3 | bits[1] << 2 | bits[2] << 1 | bits[3];
     if unicode { UNICODE_CASES[case] } else { CASES[case] }
 }
@@ -78,19 +79,24 @@ fn main() {
     };
 
     // set up noisefield
-    let mut field: NoiseField<f32> = NoiseField::new(42);
+    let mut field: NoiseField<f32> = NoiseField::new();
 
-    let added = noise::Add::new(noise::Perlin::new(), noise::Worley::new());
-    field.add_noise(Box::new(move |_, &[x,y]| added.get([x,y])), BlendMode::Add);
+    // use the noise crate to set up a perlin+worley noise generator
+    let noise_fn = noise::Add::new(noise::Perlin::new(), noise::Worley::new());
 
-    //field.add_noise(Box::new(|seed, &[x, y]| cell2_value(&seed, &[x, y]) / 2.0), BlendMode::Add);
-    //field.add_noise(Box::new(Brownian2::new(perlin2, 5).wavelength(3.0)), BlendMode::Add);
+    // create a boxed closure that will take ownership of the generator
+    field.add_noise(Box::new(move |&[x,y]| noise_fn.get([x,y])), Mode::Add);
 
-    field.add_noise(Box::new(|seed, &[x, y]| {
-        let d = ((x*x) + (y*y)).sqrt();
-        let k = distance_kernel(d, 0.0, 1.0);
-        2.0 / k
-    }), BlendMode::Mul);
+    // create a second function that will effectively limit the output field to
+    // a circle around the origin
+    field.add_noise(Box::new(|&[x, y]| {
+        let d = (x*x) + (y*y);
+        if d > 5.0 {
+            -1.0
+        } else {
+            1.0
+        }
+    }), Mode::Add);
 
     let mut running = true;
     let mut unicode = false;
@@ -107,23 +113,29 @@ fn main() {
         for oy in 0..rows {
             for ox in 0..cols {
                 let points = corners(x, y, step);
-                let samples = [field.sample(&points[0]),
-                               field.sample(&points[1]),
-                               field.sample(&points[2]),
-                               field.sample(&points[3])]
-                    .iter()
+                let mut samples: [f32; 4] = [field.sample(&points[0]),
+                                             field.sample(&points[1]),
+                                             field.sample(&points[2]),
+                                             field.sample(&points[3])];
+
+                // todo: move interactive circle sampling out into a 'noise' function
+                for (sample, c_sample) in samples
+                    .iter_mut()
                     .zip(
-                        points.iter().map(|&[sx, sy]| {
-                            let (sx, sy) = (sx * 1.5, sy);
-                            let d = ((sx-cx)*(sx-cx) + (sy-cy)*(sy-cy)).sqrt();
-                            let k = 1.0 / distance_kernel(d, 0.0, 1.0);
-                            if k > 0.3 { k*-2.0 } else { 0.0 }
-                    }))
-                    .map(|(&s, d)| s + d).collect();
+                        points.iter()
+                            .map(|&[sx, sy]| {
+                                let (sx, sy) = (sx * 1.5, sy);
+                                let d = ((sx-cx)*(sx-cx) + (sy-cy)*(sy-cy)).sqrt();
+                                let k = 1.0 / distance_kernel(d, 0.0, 1.0);
+                                if k > 0.3 { k*-2.0 } else { 0.0 }
+                            }))
+                {
+                    *sample = *sample + c_sample;
+                }
 
                 rb.print(ox * 3, oy,
                          rustbox::RB_NORMAL, Color::White, Color::Black,
-                         march(samples, threshold, unicode));
+                         march(&samples, threshold, unicode));
                 x += step;
             }
             y += step;
