@@ -2,70 +2,191 @@
 extern crate noise;
 extern crate rustbox;
 
-use std::f32::consts::PI;
 use std::default::Default;
 
-use noise::{NoiseModule, MultiFractal};
+use noise::NoiseModule;
 use rustbox::{RustBox, Event, Key, Color};
 
-type Cell = &'static str;
+// Cells are sampled sampled clockwise, like so:
+//
+// 12
+// 43
+//
+const CASES: [[&'static str; 2]; 16] = [
+    // 00
+    // 00
+    ["  ",
+     "  "],
 
-const CASES: [Cell; 16] = [
-    r"   ",
-    r"_  ",
-    r"  _",
-    r"___",
-    r" \_",
-    r"/ _",
-    r" | ",
-    r"_/ ",
-    r"_/ ",
-    r" | ",
-    r"_ \",
-    r"  \",
-    r"___",
-    r"  _",
-    r"_  ",
-    r"###",
+    // 00
+    // 10
+    [r"  ",
+     r". ",],
+
+    // 00
+    // 01
+    ["  ",
+     " ."],
+
+    // 00
+    // 11
+    ["  ",
+     "--"],
+
+    // 01
+    // 00
+    [r" .",
+     r"  "],
+
+    // 01
+    // 10
+    [r" .",
+     r". "],
+
+    // 01
+    // 01
+    [" |",
+     " |"],
+
+    // 01
+    // 11
+    [" /",
+     "/#"],
+
+    // 10
+    // 00
+    [". ",
+     "  "],
+
+    // 10
+    // 10
+    ["| ",
+     "| "],
+
+    // 10
+    // 01
+    [". ",
+     " ."],
+
+    // 10
+    // 11
+    [r"\ ",
+     r"#\"],
+
+    // 11
+    // 00
+    ["--",
+     "  "],
+
+    // 11
+    // 10
+    ["#/",
+     "/ "],
+
+    // 11
+    // 01
+    [r"\#",
+     r" \"],
+
+    // 11
+    // 11
+    ["##",
+     "##"],
 ];
 
-const UNICODE_CASES: [Cell; 16] = [
-    r"   ",
-    r"─╮ ",
-    r" ╭─",
-    r"───",
-    r" ╰─",
-    r"╱▞╱",
-    r" │█",
-    r"╱▟█",
-    r"─╯ ",
-    r"█│ ",
-    r"╲▚╲",
-    r"█▙╲",
-    r"───",
-    r"█▛╱",
-    r"╲▜█",
-    r"███",
-];
+const CASES_UNICODE: [[&'static str; 2]; 16] = [
+    // 00
+    // 00
+    ["  ",
+     "  "],
 
-fn distance_kernel(d: f32, mean: f32, sigma: f32) -> f32 {
-    let g = 1.0 / (PI/2.0).sqrt();
-    let d = (d - mean) / sigma;
-    (g * (-0.5 * d * d) / sigma) + 1.0
-}
+    // 00
+    // 10
+    [r"  ",
+     r"╮ ",],
+
+    // 00
+    // 01
+    ["  ",
+     " ╭"],
+
+    // 00
+    // 11
+    ["  ",
+     "──"],
+
+    // 01
+    // 00
+    [r" ╰",
+     r"  "],
+
+    // 01
+    // 10
+    [r" ╰",
+     r"╮ "],
+
+    // 01
+    // 01
+    [" │",
+     " │"],
+
+    // 01
+    // 11
+    ["╭╯",
+     "╯#"],
+
+    // 10
+    // 00
+    ["╯ ",
+     "  "],
+
+    // 10
+    // 10
+    ["│ ",
+     "│ "],
+
+    // 10
+    // 01
+    ["╯ ",
+     " ╭"],
+
+    // 10
+    // 11
+    [r"╰╮",
+     r"#╰"],
+
+    // 11
+    // 00
+    ["──",
+     "  "],
+
+    // 11
+    // 10
+    ["#╭",
+     "╭╯"],
+
+    // 11
+    // 01
+    [r"╮#",
+     r"╰╮"],
+
+    // 11
+    // 11
+    ["##",
+     "##"],
+];
 
 fn corners(x: f32, y: f32, width: f32) -> [[f32; 2]; 4] {
     let w = width / 2.0;
     [[x - w, y - w], [x + w, y - w], [x + w, y + w], [x - w, y + w]]
 }
 
-fn march(samples: &[f32; 4], threshold: f32, unicode: bool) -> Cell {
+fn samples_to_idx(samples: &[f32; 4], threshold: f32) -> usize {
     let bits = [if samples[0] > threshold { 1 } else { 0 },
                 if samples[1] > threshold { 1 } else { 0 },
                 if samples[2] > threshold { 1 } else { 0 },
                 if samples[3] > threshold { 1 } else { 0 }];
-    let case = bits[0] << 3 | bits[1] << 2 | bits[2] << 1 | bits[3];
-    if unicode { UNICODE_CASES[case] } else { CASES[case] }
+    bits[0] << 3 | bits[1] << 2 | bits[2] << 1 | bits[3]
 }
 
 fn main() {
@@ -75,8 +196,6 @@ fn main() {
     };
 
     // use the noise crate to set up a combination noise generator
-    //let noise_fn = noise::Add::new(noise::Perlin::new(), noise::Worley::new());
-    //let noise_fn = noise::Turbulence::new(noise::Checkerboard::new()).set_power(0.3);
     let noise_fn = noise::Blend::new(
         noise::Billow::new(),
         noise::Turbulence::new(
@@ -87,55 +206,38 @@ fn main() {
         noise::Worley::new()
     );
 
-    // create a second function that will effectively limit the output field to
-    // a circle around the origin
-    // field.add_noise(Box::new(|&[x, y]| {
-    //     let d = (x*x) + (y*y);
-    //     if d > 5.0 {
-    //         -1.0
-    //     } else {
-    //         1.0
-    //     }
-    // }), Mode::Add);
-
     let mut running = true;
     let mut unicode = false;
     let mut step = 0.1f32;
-    let mut threshold = 0.4;
+    let mut threshold = 0.25;
     let (mut startx, mut starty) = (0.0f32, 0.0f32);
-    let (mut cx, mut cy) = (5.0f32, 0.0f32);
 
     while running {
-        let (rows, cols) = (rb.height(), rb.width() / 3);
+        let (rows, cols) = (rb.height() / 2, rb.width() / 2);
         let (mut x, mut y) = (startx - cols as f32 * step / 2.0,
                               starty - rows as f32 * step / 2.0);
 
         for oy in 0..rows {
             for ox in 0..cols {
                 let points = corners(x, y, step);
-                let mut samples: [f32; 4] = [noise_fn.get(points[0]),
-                                             noise_fn.get(points[1]),
-                                             noise_fn.get(points[2]),
-                                             noise_fn.get(points[3])];
+                let samples: [f32; 4] = [noise_fn.get(points[0]),
+                                         noise_fn.get(points[1]),
+                                         noise_fn.get(points[2]),
+                                         noise_fn.get(points[3])];
 
-                // todo: move interactive circle sampling out into a 'noise' function
-                for (sample, c_sample) in samples
-                    .iter_mut()
-                    .zip(
-                        points.iter()
-                            .map(|&[sx, sy]| {
-                                let (sx, sy) = (sx * 1.5, sy);
-                                let d = ((sx-cx)*(sx-cx) + (sy-cy)*(sy-cy)).sqrt();
-                                let k = 1.0 / distance_kernel(d, 0.0, 1.0);
-                                if k > 0.3 { k*-2.0 } else { 0.0 }
-                            }))
-                {
-                    *sample = *sample + c_sample;
-                }
+                let case_rows = if unicode {
+                    CASES_UNICODE[samples_to_idx(&samples, threshold)]
+                } else {
+                    CASES[samples_to_idx(&samples, threshold)]
+                };
 
-                rb.print(ox * 3, oy,
+                rb.print(ox * 2, oy * 2,
                          rustbox::RB_NORMAL, Color::White, Color::Black,
-                         march(&samples, threshold, unicode));
+                         case_rows[0]);
+                rb.print(ox * 2, (oy * 2)+1,
+                         rustbox::RB_NORMAL, Color::White, Color::Black,
+                         case_rows[1]);
+
                 x += step;
             }
             y += step;
@@ -151,15 +253,10 @@ fn main() {
                 Key::Char('a') | Key::Left  => startx -= step,
                 Key::Char('d') | Key::Right => startx += step,
 
-                Key::Char('i') => cy -= step / 2.0,
-                Key::Char('k') => cy += step / 2.0,
-                Key::Char('j') => cx -= step / 2.0,
-                Key::Char('l') => cx += step / 2.0,
-
-                Key::Char('+') if step > 0.01 => step -= 0.001,
-                Key::Char('-') => step += 0.001,
-                Key::Char('[') => threshold -= 0.01,
-                Key::Char(']') => threshold += 0.01,
+                Key::Char('+') if step > 0.01 => step -= 0.002,
+                Key::Char('-') => step += 0.002,
+                Key::Char('[') => threshold -= 0.005,
+                Key::Char(']') => threshold += 0.005,
 
                 Key::Char('u') => unicode = !unicode,
 
