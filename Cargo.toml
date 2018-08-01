@@ -6,7 +6,7 @@ authors = ["Peter Jacobs <peter@crespyl.net>"]
 
 [dependencies]
 rand = "0.3"
-noise = "0.4"
+noise = "0.5"
 rustbox = "0.9"
 num = "0.1"
 
