@@ -4,7 +4,7 @@ extern crate rustbox;
 
 use std::default::Default;
 
-use noise::NoiseModule;
+use noise::NoiseFn;
 use rustbox::{RustBox, Event, Key, Color};
 
 // Cells are sampled sampled clockwise, like so:
@@ -176,12 +176,12 @@ const CASES_UNICODE: [[&'static str; 2]; 16] = [
      "##"],
 ];
 
-fn corners(x: f32, y: f32, width: f32) -> [[f32; 2]; 4] {
+fn corners(x: f64, y: f64, width: f64) -> [[f64; 2]; 4] {
     let w = width / 2.0;
     [[x - w, y - w], [x + w, y - w], [x + w, y + w], [x - w, y + w]]
 }
 
-fn samples_to_idx(samples: &[f32; 4], threshold: f32) -> usize {
+fn samples_to_idx(samples: &[f64; 4], threshold: f64) -> usize {
     let bits = [if samples[0] > threshold { 1 } else { 0 },
                 if samples[1] > threshold { 1 } else { 0 },
                 if samples[2] > threshold { 1 } else { 0 },
@@ -196,31 +196,34 @@ fn main() {
     };
 
     // use the noise crate to set up a combination noise generator
-    let noise_fn = noise::Blend::new(
-        noise::Billow::new(),
-        noise::Turbulence::new(
-            noise::ScalePoint::new(
-                noise::Checkerboard::new()
-            ).set_x_scale(0.1).set_y_scale(0.1)
-        ).set_power(0.3),
-        noise::Worley::new()
-    );
+
+    let billow = noise::Billow::new();
+
+    let checkerboard = noise::Checkerboard::new();
+    let scale_point = noise::ScalePoint::new(
+        &checkerboard
+    ).set_x_scale(0.1).set_y_scale(0.1);
+    let turbulence = noise::Turbulence::new(&scale_point).set_power(0.3);
+
+    let worley = noise::Worley::new();
+
+    let noise_fn = noise::Blend::new(&billow, &turbulence, &worley);
 
     let mut running = true;
     let mut unicode = false;
-    let mut step = 0.1f32;
+    let mut step = 0.1f64;
     let mut threshold = 0.25;
-    let (mut startx, mut starty) = (0.0f32, 0.0f32);
+    let (mut startx, mut starty) = (0.0f64, 0.0f64);
 
     while running {
         let (rows, cols) = (rb.height() / 2, rb.width() / 2);
-        let (mut x, mut y) = (startx - cols as f32 * step / 2.0,
-                              starty - rows as f32 * step / 2.0);
+        let (mut x, mut y) = (startx - cols as f64 * step / 2.0,
+                              starty - rows as f64 * step / 2.0);
 
         for oy in 0..rows {
             for ox in 0..cols {
                 let points = corners(x, y, step);
-                let samples: [f32; 4] = [noise_fn.get(points[0]),
+                let samples: [f64; 4] = [noise_fn.get(points[0]),
                                          noise_fn.get(points[1]),
                                          noise_fn.get(points[2]),
                                          noise_fn.get(points[3])];
@@ -241,7 +244,7 @@ fn main() {
                 x += step;
             }
             y += step;
-            x = startx - cols as f32 * step / 2.0;
+            x = startx - cols as f64 * step / 2.0;
         }
 
         rb.present();
